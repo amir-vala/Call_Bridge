@@ -1,88 +1,208 @@
-<?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:background="#F5F5F5">
+package com.callbridge;
 
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="24dp">
+import android.Manifest;
+import android.app.Activity;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.os.Build;
+import android.os.Bundle;
+import android.util.Log;
+import android.widget.Button;
+import android.widget.TextView;
+import android.widget.Toast;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+import java.net.Inet4Address;
+import java.net.InetAddress;
+import java.net.NetworkInterface;
+import java.util.Collections;
 
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="📞 پل تماس"
-            android:textSize="32sp"
-            android:textStyle="bold"
-            android:textColor="#1976D2"
-            android:gravity="center"
-            android:layout_marginTop="40dp"
-            android:layout_marginBottom="8dp"/>
+public class MainActivity extends Activity {
 
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="اتصال کامپیوتر به گوشی بدون ADB"
-            android:textSize="14sp"
-            android:textColor="#757575"
-            android:gravity="center"
-            android:layout_marginBottom="32dp"/>
+    private static final String TAG = "MainActivity";
+    private static final int PERM_REQ = 100;
 
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:background="#FFFFFF"
-            android:padding="20dp"
-            android:layout_marginBottom="16dp">
+    private TextView statusText;
+    private TextView ipText;
+    private Button startBtn;
 
-            <TextView
-                android:id="@+id/statusText"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="🔴 سرویس متوقف است"
-                android:textSize="18sp"
-                android:textStyle="bold"
-                android:gravity="center"
-                android:layout_marginBottom="12dp"/>
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        
+        try {
+            setContentView(R.layout.activity_main);
+            
+            statusText = findViewById(R.id.statusText);
+            ipText = findViewById(R.id.ipText);
+            startBtn = findViewById(R.id.startBtn);
 
-            <TextView
-                android:id="@+id/ipText"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text=""
-                android:textSize="14sp"
-                android:textColor="#424242"
-                android:lineSpacingExtra="6dp"
-                android:fontFamily="monospace"/>
-        </LinearLayout>
+            startBtn.setOnClickListener(v -> {
+                try {
+                    if (!BridgeService.isRunning()) {
+                        checkPermissions();
+                    } else {
+                        stopBridge();
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "خطا در کلیک: " + e.getMessage());
+                    Toast.makeText(this, "خطا: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                }
+            });
 
-        <Button
-            android:id="@+id/startBtn"
-            android:layout_width="match_parent"
-            android:layout_height="56dp"
-            android:text="▶️  شروع سرویس"
-            android:textSize="18sp"
-            android:backgroundTint="#1976D2"
-            android:layout_marginBottom="24dp"/>
+            updateUI();
+            Log.i(TAG, "Activity ساخته شد ✅");
+            
+        } catch (Exception e) {
+            Log.e(TAG, "خطا در onCreate: " + e.getMessage());
+            Toast.makeText(this, "خطا: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
 
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:background="#EEEEEE"
-            android:padding="16dp">
+    @Override
+    protected void onResume() {
+        super.onResume();
+        try {
+            updateUI();
+        } catch (Exception e) {
+            Log.e(TAG, "خطا در onResume: " + e.getMessage());
+        }
+    }
 
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="📋 راهنما:\n\n۱. دکمه شروع سرویس را بزنید\n۲. دسترسی‌ها را تأیید کنید\n۳. از کامپیوتر به آدرس وصل شوید\n\n🔌 برای کابل:\nUSB Tethering را در تنظیمات فعال کنید"
-                android:textSize="13sp"
-                android:textColor="#424242"
-                android:lineSpacingExtra="4dp"/>
-        </LinearLayout>
+    private void checkPermissions() {
+        String[] perms;
+        if (Build.VERSION.SDK_INT >= 33) {
+            perms = new String[]{
+                Manifest.permission.CALL_PHONE,
+                Manifest.permission.READ_CALL_LOG,
+                Manifest.permission.READ_CONTACTS,
+                Manifest.permission.READ_PHONE_STATE,
+                Manifest.permission.ANSWER_PHONE_CALLS,
+                Manifest.permission.POST_NOTIFICATIONS
+            };
+        } else {
+            perms = new String[]{
+                Manifest.permission.CALL_PHONE,
+                Manifest.permission.READ_CALL_LOG,
+                Manifest.permission.READ_CONTACTS,
+                Manifest.permission.READ_PHONE_STATE,
+                Manifest.permission.ANSWER_PHONE_CALLS
+            };
+        }
 
-    </LinearLayout>
-</ScrollView>
+        boolean allGranted = true;
+        for (String p : perms) {
+            if (ContextCompat.checkSelfPermission(this, p) != PackageManager.PERMISSION_GRANTED) {
+                allGranted = false;
+                break;
+            }
+        }
+
+        if (allGranted) {
+            startBridge();
+        } else {
+            ActivityCompat.requestPermissions(this, perms, PERM_REQ);
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == PERM_REQ) {
+            boolean all = true;
+            for (int r : grantResults) {
+                if (r != PackageManager.PERMISSION_GRANTED) {
+                    all = false;
+                    break;
+                }
+            }
+            if (all) {
+                startBridge();
+            } else {
+                Toast.makeText(this, "⚠️ دسترسی‌ها لازم است", Toast.LENGTH_LONG).show();
+            }
+        }
+    }
+
+    private void startBridge() {
+        try {
+            Intent intent = new Intent(this, BridgeService.class);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(intent);
+            } else {
+                startService(intent);
+            }
+            updateUI();
+            Toast.makeText(this, "✅ سرویس شروع شد", Toast.LENGTH_SHORT).show();
+        } catch (Exception e) {
+            Log.e(TAG, "خطا در startBridge: " + e.getMessage());
+            Toast.makeText(this, "خطا: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void stopBridge() {
+        try {
+            Intent intent = new Intent(this, BridgeService.class);
+            stopService(intent);
+            updateUI();
+            Toast.makeText(this, "⏹ سرویس متوقف شد", Toast.LENGTH_SHORT).show();
+        } catch (Exception e) {
+            Log.e(TAG, "خطا در stopBridge: " + e.getMessage());
+        }
+    }
+
+    private void updateUI() {
+        try {
+            if (BridgeService.isRunning()) {
+                statusText.setText("🟢 سرویس فعال است");
+                statusText.setTextColor(0xFF4CAF50);
+                startBtn.setText("⏹  توقف سرویس");
+                ipText.setText("آدرس‌های اتصال:\n\n" + getConnectionInfo());
+            } else {
+                statusText.setText("🔴 سرویس متوقف است");
+                statusText.setTextColor(0xFFE53935);
+                startBtn.setText("▶️  شروع سرویس");
+                ipText.setText("");
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "خطا در updateUI: " + e.getMessage());
+        }
+    }
+
+    private String getConnectionInfo() {
+        try {
+            StringBuilder sb = new StringBuilder();
+            String wifiIp = getLocalIp();
+            
+            if (wifiIp != null) {
+                sb.append("📶 WiFi:\n");
+                sb.append("http://").append(wifiIp).append(":8765\n\n");
+            }
+
+            sb.append("🔌 کابل USB:\n");
+            sb.append("USB Tethering را فعال کنید\n");
+            sb.append("آدرس: http://192.168.42.129:8765\n");
+
+            return sb.toString();
+        } catch (Exception e) {
+            return "خطا در گرفتن IP";
+        }
+    }
+
+    private String getLocalIp() {
+        try {
+            for (NetworkInterface intf : Collections.list(NetworkInterface.getNetworkInterfaces())) {
+                if (intf.getName().startsWith("wlan")) {
+                    for (InetAddress addr : Collections.list(intf.getInetAddresses())) {
+                        if (!addr.isLoopbackAddress() && addr instanceof Inet4Address) {
+                            return addr.getHostAddress();
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "خطا در getLocalIp: " + e.getMessage());
+        }
+        return null;
+    }
+}
