@@ -2,16 +2,12 @@ package com.callbridge;
 
 import android.Manifest;
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.provider.Settings;
 import android.view.View;
 import android.widget.Button;
-import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.core.app.ActivityCompat;
@@ -24,12 +20,10 @@ import java.util.Collections;
 public class MainActivity extends Activity {
 
     private static final int PERM_REQ = 100;
-    private static final int OVERLAY_REQ = 101;
 
     private TextView statusText;
     private TextView ipText;
     private Button startBtn;
-    private boolean serviceRunning = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -41,14 +35,13 @@ public class MainActivity extends Activity {
         startBtn = findViewById(R.id.startBtn);
 
         startBtn.setOnClickListener(v -> {
-            if (!serviceRunning) {
+            if (!BridgeService.isRunning()) {
                 checkPermissions();
             } else {
                 stopBridge();
             }
         });
 
-        // بررسی وضعیت سرویس
         updateUI();
     }
 
@@ -57,8 +50,6 @@ public class MainActivity extends Activity {
         super.onResume();
         updateUI();
     }
-
-    // ─── بررسی و درخواست پرمیشن‌ها ───
 
     private void checkPermissions() {
         String[] perms = {
@@ -69,10 +60,11 @@ public class MainActivity extends Activity {
             Manifest.permission.ANSWER_PHONE_CALLS
         };
 
-        // Android 13+ نیاز به پرمیشن نوتیفیکیشن دارد
         if (Build.VERSION.SDK_INT >= 33) {
-            perms = java.util.Arrays.copyOf(perms, perms.length + 1);
-            perms[perms.length - 1] = Manifest.permission.POST_NOTIFICATIONS;
+            String[] newPerms = new String[perms.length + 1];
+            System.arraycopy(perms, 0, newPerms, 0, perms.length);
+            newPerms[perms.length] = Manifest.permission.POST_NOTIFICATIONS;
+            perms = newPerms;
         }
 
         boolean allGranted = true;
@@ -109,8 +101,6 @@ public class MainActivity extends Activity {
         }
     }
 
-    // ─── شروع و توقف سرویس ───
-
     private void startBridge() {
         Intent intent = new Intent(this, BridgeService.class);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -118,7 +108,6 @@ public class MainActivity extends Activity {
         } else {
             startService(intent);
         }
-        serviceRunning = true;
         updateUI();
         Toast.makeText(this, "✅ سرویس شروع شد", Toast.LENGTH_SHORT).show();
     }
@@ -126,21 +115,19 @@ public class MainActivity extends Activity {
     private void stopBridge() {
         Intent intent = new Intent(this, BridgeService.class);
         stopService(intent);
-        serviceRunning = false;
         updateUI();
         Toast.makeText(this, "⏹ سرویس متوقف شد", Toast.LENGTH_SHORT).show();
     }
 
     private void updateUI() {
+        // ✅ استفاده صحیح از متد static
         if (BridgeService.isRunning()) {
-            serviceRunning = true;
             statusText.setText("🟢 سرویس فعال است");
             statusText.setTextColor(0xFF4CAF50);
             startBtn.setText("⏹  توقف سرویس");
             startBtn.setBackgroundColor(0xFFE53935);
             ipText.setText("آدرس‌های اتصال:\n\n" + getConnectionInfo());
         } else {
-            serviceRunning = false;
             statusText.setText("🔴 سرویس متوقف است");
             statusText.setTextColor(0xFFE53935);
             startBtn.setText("▶️  شروع سرویس");
@@ -149,19 +136,15 @@ public class MainActivity extends Activity {
         }
     }
 
-    // ─── اطلاعات اتصال ───
-
     private String getConnectionInfo() {
         StringBuilder sb = new StringBuilder();
 
-        // IP WiFi
         String wifiIp = getLocalIp();
         if (wifiIp != null) {
             sb.append("📶 WiFi:\n");
             sb.append("http://").append(wifiIp).append(":8765\n\n");
         }
 
-        // IP USB Tethering
         sb.append("🔌 کابل USB:\n");
         sb.append("۱. کابل را وصل کنید\n");
         sb.append("۲. تنظیمات ← شبکه ← نقطه اتصال ← اتصال با کابل ✅\n");
