@@ -9,7 +9,7 @@ android {
     defaultConfig {
         applicationId "com.callbridge"
         minSdk 26          // API 26 = Android 8 (برای TelecomManager)
-        targetSdk 34
+        targetSdk 33
         versionCode 1
         versionName "1.0"
     }
