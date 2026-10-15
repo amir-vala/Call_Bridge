@@ -1,0 +1,45 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.callbridge'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.callbridge"
+        minSdk 26          // API 26 = Android 8 (برای TelecomManager)
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt')
+        }
+        debug {
+            minifyEnabled false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    // خروجی با نام ساده
+    applicationVariants.all { variant ->
+        variant.outputs.all {
+            outputFileName = "CallBridge-v${variant.versionName}.apk"
+        }
+    }
+}
+
+dependencies {
+    // سرور HTTP سبک (۵۰ کیلوبایت)
+    implementation 'org.nanohttpd:nanohttpd:2.3.1'
+    // پشتیبانی از پرمیشن‌ها
+    implementation 'androidx.core:core:1.12.0'
+}
