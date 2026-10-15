@@ -18,51 +18,24 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
 
-      - name: 🔧 Setup Android SDK (Manual)
-        run: |
-          # استفاده از Android SDK از پیش نصب‌شده در GitHub runner
-          export ANDROID_HOME=/usr/local/lib/android/sdk
-          export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
-          export PATH=$PATH:$ANDROID_HOME/platform-tools
-          
-          # پذیرش لایسنس‌ها
-          yes | sdkmanager --licenses > /dev/null 2>&1 || true
-          
-          # نصب ابزارهای لازم
-          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" --channel=0 || true
-          
-          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
-          echo "PATH=$PATH" >> $GITHUB_ENV
+      - name: 🛠️ Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.4' # قفل کردن نسخه روی 8.4 برای سازگاری با AGP 8.1
 
       - name: 🔐 Grant execute permission for gradlew
         run: |
-          if [ -f gradlew ]; then
-            chmod +x gradlew
+          # اگر فایل gradlew وجود ندارد، آن را با نسخه 8.4 می‌سازیم
+          if [ ! -f gradlew ]; then
+            gradle wrapper --gradle-version 8.4
           fi
-
-      - name: 📦 Cache Gradle packages
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
+          chmod +x gradlew
 
       - name: 🏗️ Build Debug APK
-        env:
-          ANDROID_HOME: /usr/local/lib/android/sdk
         run: |
-          if [ -f gradlew ]; then
-            ./gradlew assembleDebug --no-daemon --stacktrace
-          else
-            # ساخت gradle wrapper اگر وجود ندارد
-            gradle wrapper --gradle-version 8.0
-            ./gradlew assembleDebug --no-daemon --stacktrace
-          fi
+          # اجرای بیلد با استفاده از wrapper (که نسخه 8.4 را تضمین می‌کند)
+          ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: 📤 Upload APK
         uses: actions/upload-artifact@v4
@@ -75,6 +48,6 @@ jobs:
       - name: 📊 List build outputs
         if: success()
         run: |
-          echo "📦 Build completed successfully!"
-          echo "APK files:"
+          echo "🎉 Build completed successfully!"
+          echo "APK files found:"
           find app/build/outputs/apk -name "*.apk" -ls
